@@ -12,6 +12,7 @@ pygame.init()
 FPS = 30
 SIZE = WIDTH, HEIGHT = 800, 600
 COLOR = "black"
+SOUND_VOLUME = 0.75
 screen = pygame.display.set_mode(SIZE)
 pygame.display.set_caption("Битва за Салонце")
 
@@ -19,8 +20,9 @@ clock = pygame.time.Clock()
 
 manager = pygame_gui.UIManager(SIZE)
 
-pygame.mixer.music.load("data/sounds/menu_music.mp3")
-pygame.mixer.music.play()
+pygame.mixer.music.load("data/sounds/menu.wav")
+pygame.mixer.music.set_volume(0.75)
+pygame.mixer.music.play(-1)
 
 
 def terminate():
@@ -43,8 +45,25 @@ def load_image(name, color_key=None):
     return image
 
 
+def load_sound(name):
+    sound = pygame.mixer.Sound("data/sounds/" + name)
+    sound.play()
+    sound.set_volume(SOUND_VOLUME)
+
+
+def hide_elements(elems):
+    for elem in elems:
+        elem.hide()
+
+
+def show_elements(elems):
+    for elem in elems:
+        elem.show()
+
+
 def kill_elements(elems):
     for elem in elems:
+        elem.hide()
         elem.kill()
 
 
@@ -80,12 +99,14 @@ def start_menu():
     )
     elements = [start_game_btn, upload_game_btn, stat_btn, settings_btn, exit_game_btn]
     while True:
+        screen.blit(start_logo, (0, 0))
         time_delta = clock.tick(60) / 1000
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
             if event.type == pygame_gui.UI_BUTTON_PRESSED:
-                kill_elements(elements)
+                load_sound("button_clicked.mp3")
+                hide_elements(elements)
                 if event.ui_element == start_game_btn:
                     select_level_menu()
                 elif event.ui_element == upload_game_btn:
@@ -96,6 +117,10 @@ def start_menu():
                     parameters()
                 elif event.ui_element == exit_game_btn:
                     terminate()
+                show_elements(elements)
+                screen.blit(start_logo, (0, 0))
+            if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
+                load_sound("button_hover_2.mp3")
             manager.process_events(event)
         manager.update(time_delta)
         manager.draw_ui(screen)
@@ -107,18 +132,33 @@ def upload_game_menu():
 
 
 def parameters():
+    global SOUND_VOLUME
+
     bg = load_image("start_bg_without_logo.jpg")
     screen.fill((0, 0, 0))
     screen.blit(bg, (0, 0))
     label_1 = pygame_gui.elements.UILabel(
-        relative_rect=pygame.Rect((25, 25), (150, 25)),
+        relative_rect=pygame.Rect((25, 25), (250, 50)),
         text="Громкость музыки:",
         manager=manager
     )
-    sound_volume_scr_bar = pygame_gui.elements.UIHorizontalSlider(
-        relative_rect=pygame.Rect((190, 25), (250, 25)),
+    label_2 = pygame_gui.elements.UILabel(
+        relative_rect=pygame.Rect((25, 80), (250, 50)),
+        text="Громкость звуков:",
+        manager=manager
+    )
+    music_volume_scr_bar = pygame_gui.elements.UIHorizontalSlider(
+        relative_rect=pygame.Rect((280, 25), (250, 50)),
         start_value=pygame.mixer.music.get_volume() * 100,
         value_range=(0, 100),
+        click_increment=5,
+        manager=manager
+    )
+    sound_volume_scr_bar = pygame_gui.elements.UIHorizontalSlider(
+        relative_rect=pygame.Rect((280, 80), (250, 50)),
+        start_value=SOUND_VOLUME * 100,
+        value_range=(0, 100),
+        click_increment=5,
         manager=manager
     )
     exit_to_menu_btn = pygame_gui.elements.UIButton(
@@ -126,20 +166,25 @@ def parameters():
         text='Вернуться в меню',
         manager=manager
     )
-    elements = [label_1, sound_volume_scr_bar, exit_to_menu_btn]
+    settings_elements = [label_1, label_2, music_volume_scr_bar,
+                         sound_volume_scr_bar, exit_to_menu_btn]
     while True:
+        music_volume = music_volume_scr_bar.get_current_value()
+        SOUND_VOLUME = sound_volume_scr_bar.get_current_value() / 100
+        pygame.mixer.music.set_volume(music_volume / 100)
+
         time_delta = clock.tick(60) / 1000
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
-            if event.type == pygame_gui.UI_HORIZONTAL_SLIDER_MOVED:
-                if event.ui_element == sound_volume_scr_bar:
-                    value = sound_volume_scr_bar.get_current_value()
-                    pygame.mixer.music.set_volume(value / 100)
             if event.type == pygame_gui.UI_BUTTON_PRESSED:
                 if event.ui_element == exit_to_menu_btn:
-                    kill_elements(elements)
-                    start_menu()
+                    load_sound("button_clicked.mp3")
+                    kill_elements(settings_elements)
+                    return
+            if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
+                if event.ui_element == exit_to_menu_btn:
+                    load_sound("button_hover_2.mp3")
             manager.process_events(event)
         manager.update(time_delta)
         manager.draw_ui(screen)
