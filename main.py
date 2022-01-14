@@ -4,7 +4,6 @@ import sys
 import pygame
 import pygame_gui
 import csv
-import sqlite3
 
 
 pygame.init()
@@ -137,43 +136,43 @@ def upload_game_menu(mode):
     screen.blit(bg, (0, 0))
 
     load_1 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((50, 20), (300, 80)),
+        relative_rect=pygame.Rect((50, 20), (300, 75)),
         text='Слот сохранения 1', manager=manager
     )
     load_2 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((50, 120), (300, 80)),
+        relative_rect=pygame.Rect((50, 120), (300, 75)),
         text='Слот сохранения 2', manager=manager
     )
     load_3 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((50, 220), (300, 80)),
+        relative_rect=pygame.Rect((50, 220), (300, 75)),
         text='Слот сохранения 3', manager=manager
     )
     load_4 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((50, 320), (300, 80)),
+        relative_rect=pygame.Rect((50, 320), (300, 75)),
         text='Слот сохранения 4', manager=manager
     )
     load_5 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((50, 420), (300, 80)),
+        relative_rect=pygame.Rect((50, 420), (300, 75)),
         text='Слот сохранения 5', manager=manager
     )
     load_6 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((450, 20), (300, 80)),
+        relative_rect=pygame.Rect((450, 20), (300, 75)),
         text='Слот сохранения 6', manager=manager
     )
     load_7 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((450, 120), (300, 80)),
+        relative_rect=pygame.Rect((450, 120), (300, 75)),
         text='Слот сохранения 7', manager=manager
     )
     load_8 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((450, 220), (300, 80)),
+        relative_rect=pygame.Rect((450, 220), (300, 75)),
         text='Слот сохранения 8', manager=manager
     )
     load_9 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((450, 320), (300, 80)),
+        relative_rect=pygame.Rect((450, 320), (300, 75)),
         text='Слот сохранения 9', manager=manager
     )
     load_10 = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((450, 420), (300, 80)),
+        relative_rect=pygame.Rect((450, 420), (300, 75)),
         text='Слот сохранения 10', manager=manager
     )
     exit_to_menu_btn = pygame_gui.elements.UIButton(
@@ -293,7 +292,66 @@ def parameters():
 
 
 def stat_menu():
-    pass
+    global CUR_SAVE
+
+    bg = load_image("start_bg_without_logo.jpg")
+    screen.blit(bg, (0, 0))
+
+    with open(f'data/saves/{CUR_SAVE}.csv', encoding="utf8") as csvfile:
+        settings = list(csv.reader(csvfile, delimiter=';', quotechar='"'))[1:]
+        label_level_opened = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((35, 35), (220, 50)),
+            text=f"Пройденных уровней: {int(settings[0][1]) - 1}",
+            manager=manager
+        )
+        label_killed_ships = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((290, 35), (220, 50)),
+            text=f"Убитых кораблей: {settings[1][1]}",
+            manager=manager
+        )
+        label_shots_value = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((545, 35), (220, 50)),
+            text=f"Выстрелов сделано: {settings[2][1]}",
+            manager=manager
+        )
+        label_accuracy = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((35, 120), (220, 50)),
+            text=f"Точность: {settings[3][1]}%",
+            manager=manager
+        )
+        label_bonus_value = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((290, 120), (220, 50)),
+            text=f"Подобранных бонусов: {settings[4][1]}",
+            manager=manager
+        )
+        label_points_value = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect((545, 120), (220, 50)),
+            text=f"Полученных очков: {settings[5][1]}",
+            manager=manager
+        )
+    exit_to_menu_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((10, 540), (250, 50)),
+        text='Вернуться в меню',
+        manager=manager
+    )
+    elements = [label_level_opened, label_killed_ships, label_shots_value,
+                label_accuracy, label_bonus_value, label_points_value, exit_to_menu_btn]
+    while True:
+        time_delta = clock.tick(60) / 1000
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame_gui.UI_BUTTON_PRESSED:
+                load_sound("button_clicked.mp3")
+                if event.ui_element == exit_to_menu_btn:
+                    kill_elements(elements)
+                    return
+            if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
+                load_sound("button_hover_2.mp3")
+            manager.process_events(event)
+        manager.update(time_delta)
+        manager.draw_ui(screen)
+        pygame.display.update()
 
 
 start_menu()
