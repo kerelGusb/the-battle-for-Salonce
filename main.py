@@ -4,15 +4,19 @@ import sys
 import pygame
 import pygame_gui
 import csv
+import sqlite3
 
 
 pygame.init()
 
 FPS = 30
 SIZE = WIDTH, HEIGHT = 800, 600
-SOUND_VOLUME = 0.75
+SOUND_VOLUME = 0.5
 CUR_SAVE = "save_1"
 LEVEL_OPENED = 1
+
+con = sqlite3.connect("data/game_data.db")
+cur = con.cursor()
 
 screen = pygame.display.set_mode(SIZE)
 pygame.display.set_caption("Битва за Салонце")
@@ -66,11 +70,11 @@ def kill_elements(elems):
 
 def start_menu():
     pygame.mixer.music.load("data/sounds/menu.wav")
-    pygame.mixer.music.set_volume(0.75)
+    pygame.mixer.music.set_volume(0.5)
     pygame.mixer.music.play(-1)
 
     screen.fill(pygame.Color("black"))
-    start_logo = load_image("start_bg.jpg")
+    start_logo = load_image("start_bg_2.jpg")
     screen.blit(start_logo, (0, 0))
 
     start_game_btn = pygame_gui.elements.UIButton(
@@ -124,6 +128,106 @@ def start_menu():
                 load_sound("button_hover_2.mp3")
             manager.process_events(event)
         manager.update(time_delta)
+        manager.draw_ui(screen)
+        pygame.display.update()
+
+
+def draw_planets(pliton, teptune, buran, maturne, jupater,
+                 mors, kemlya, veneda, merciry, salonce):
+    screen.blit(pliton, (50, 50))
+    screen.blit(teptune, (50, 200))
+    screen.blit(buran, (50, 350))
+    screen.blit(maturne, (185, 50))
+    screen.blit(jupater, (200, 200))
+    screen.blit(mors, (200, 350))
+    screen.blit(kemlya, (350, 50))
+    screen.blit(veneda, (350, 200))
+    screen.blit(merciry, (350, 350))
+    screen.blit(salonce, (515, 325))
+
+
+def select_level_menu():
+    global LEVEL_OPENED
+
+    time_delta = clock.tick(60) / 1000
+    planets = ["Плитон", "Тептун", "Буран", "Матурн", "Юпатер",
+               "Морс", "Кемля", "Венеда", "Меркирий", "Салонце (финал)"]
+
+    bg = load_image("start_bg_without_logo.jpg")
+    screen.blit(bg, (0, 0))
+    pliton_im = load_image("pliton.png")
+    if LEVEL_OPENED > 1:
+        teptune_im = load_image("Teptune.png")
+    else:
+        teptune_im = load_image("Teptune_locked.png")
+    if LEVEL_OPENED > 2:
+        buran_im = load_image("Buran.png")
+    else:
+        buran_im = load_image("Buran_locked.png")
+    if LEVEL_OPENED > 3:
+        maturne_im = load_image("Maturne.png")
+    else:
+        maturne_im = load_image("Maturne_locked.png")
+    if LEVEL_OPENED > 4:
+        jupater_im = load_image("Jupater.png")
+    else:
+        jupater_im = load_image("Jupater_locked.png")
+    if LEVEL_OPENED > 5:
+        mors_im = load_image("mors.png")
+    else:
+        mors_im = load_image("mors_locked.png")
+    if LEVEL_OPENED > 6:
+        kemlya_im = load_image("Kemlya.png")
+    else:
+        kemlya_im = load_image("Kemlya_locked.png")
+    if LEVEL_OPENED > 7:
+        veneda_im = load_image("veneda.png")
+    else:
+        veneda_im = load_image("veneda_locked.png")
+    if LEVEL_OPENED > 8:
+        merciry_im = load_image("merciry.png")
+    else:
+        merciry_im = load_image("merciry_locked.png")
+    if LEVEL_OPENED > 9:
+        salonce_im = load_image("salonce_2.png")
+    else:
+        salonce_im = load_image("salonce_2_locked.png")
+    planet_choose = pygame_gui.elements.ui_drop_down_menu.UIDropDownMenu(
+        options_list=planets,
+        starting_option=planets[LEVEL_OPENED - 1],
+        relative_rect=pygame.Rect((500, 50), (200, 50)),
+        manager=manager
+    )
+    start_level = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((60, 500), (310, 60)),
+        text='Запустить уровень',
+        manager=manager
+    )
+    exit_to_menu_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((430, 500), (310, 60)),
+        text='Вернуться в меню',
+        manager=manager
+    )
+    elements = [start_level, planet_choose, exit_to_menu_btn]
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame_gui.UI_BUTTON_PRESSED:
+                load_sound("button_clicked.mp3")
+                if event.ui_element == exit_to_menu_btn:
+                    kill_elements(elements)
+                    return
+            if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
+                load_sound("button_hover_2.mp3")
+            if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
+                print(event.text)
+                continue
+            manager.process_events(event)
+        manager.update(time_delta)
+        screen.blit(bg, (0, 0))
+        draw_planets(pliton_im, teptune_im, buran_im, maturne_im, jupater_im,
+                     mors_im, kemlya_im, veneda_im, merciry_im, salonce_im)
         manager.draw_ui(screen)
         pygame.display.update()
 
@@ -198,8 +302,8 @@ def upload_game_menu(mode):
             if event.type == pygame.QUIT:
                 terminate()
             if event.type == pygame_gui.UI_BUTTON_PRESSED:
+                load_sound("button_clicked.mp3")
                 if event.ui_element in elements:
-                    load_sound("button_clicked.mp3")
                     if event.ui_element != exit_to_menu_btn:
                         temp_save = save_to_file[event.ui_element]
                         confirmation_dialog = pygame_gui.windows.UIConfirmationDialog(
@@ -220,16 +324,12 @@ def upload_game_menu(mode):
                 CUR_SAVE = temp_save
                 with open(f'data/saves/{CUR_SAVE}.csv', encoding="utf8") as csvfile:
                     if mode == "load":
-                        LEVEL_OPENED = list(csv.reader(csvfile, delimiter=';', quotechar='"'))[1][1]
+                        LEVEL_OPENED = int(list(csv.reader(csvfile, delimiter=';', quotechar='"'))[1][1])
             manager.process_events(event)
         manager.update(time_delta)
         screen.blit(bg, (0, 0))
         manager.draw_ui(screen)
         pygame.display.update()
-
-
-def select_level_menu():
-    pass
 
 
 def parameters():
@@ -238,31 +338,31 @@ def parameters():
     bg = load_image("start_bg_without_logo.jpg")
     screen.blit(bg, (0, 0))
     label_1 = pygame_gui.elements.UILabel(
-        relative_rect=pygame.Rect((25, 25), (250, 50)),
+        relative_rect=pygame.Rect((60, 25), (310, 50)),
         text="Громкость музыки:",
         manager=manager
     )
     label_2 = pygame_gui.elements.UILabel(
-        relative_rect=pygame.Rect((25, 80), (250, 50)),
+        relative_rect=pygame.Rect((60, 105), (310, 50)),
         text="Громкость звуков:",
         manager=manager
     )
     music_volume_scr_bar = pygame_gui.elements.UIHorizontalSlider(
-        relative_rect=pygame.Rect((280, 25), (250, 50)),
+        relative_rect=pygame.Rect((430, 25), (310, 50)),
         start_value=pygame.mixer.music.get_volume() * 100,
         value_range=(0, 100),
         click_increment=5,
         manager=manager
     )
     sound_volume_scr_bar = pygame_gui.elements.UIHorizontalSlider(
-        relative_rect=pygame.Rect((280, 80), (250, 50)),
+        relative_rect=pygame.Rect((430, 105), (310, 50)),
         start_value=SOUND_VOLUME * 100,
         value_range=(0, 100),
         click_increment=5,
         manager=manager
     )
     exit_to_menu_btn = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((10, 540), (250, 50)),
+        relative_rect=pygame.Rect((245, 185), (310, 60)),
         text='Вернуться в меню',
         manager=manager
     )
@@ -300,37 +400,37 @@ def stat_menu():
     with open(f'data/saves/{CUR_SAVE}.csv', encoding="utf8") as csvfile:
         settings = list(csv.reader(csvfile, delimiter=';', quotechar='"'))[1:]
         label_level_opened = pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((35, 35), (220, 50)),
-            text=f"Пройденных уровней: {int(settings[0][1]) - 1}",
+            relative_rect=pygame.Rect((70, 40), (295, 60)),
+            text=f"Уровней пройдено: {int(settings[0][1]) - 1}",
             manager=manager
         )
         label_killed_ships = pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((290, 35), (220, 50)),
-            text=f"Убитых кораблей: {settings[1][1]}",
+            relative_rect=pygame.Rect((435, 40), (295, 60)),
+            text=f"Кораблей убито: {settings[1][1]}",
             manager=manager
         )
         label_shots_value = pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((545, 35), (220, 50)),
+            relative_rect=pygame.Rect((70, 160), (295, 60)),
             text=f"Выстрелов сделано: {settings[2][1]}",
             manager=manager
         )
         label_accuracy = pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((35, 120), (220, 50)),
+            relative_rect=pygame.Rect((435, 160), (295, 60)),
             text=f"Точность: {settings[3][1]}%",
             manager=manager
         )
         label_bonus_value = pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((290, 120), (220, 50)),
-            text=f"Подобранных бонусов: {settings[4][1]}",
+            relative_rect=pygame.Rect((70, 280), (295, 60)),
+            text=f"Бонусов активировано: {settings[4][1]}",
             manager=manager
         )
         label_points_value = pygame_gui.elements.UILabel(
-            relative_rect=pygame.Rect((545, 120), (220, 50)),
-            text=f"Полученных очков: {settings[5][1]}",
+            relative_rect=pygame.Rect((435, 280), (295, 60)),
+            text=f"Очков получено: {settings[5][1]}",
             manager=manager
         )
     exit_to_menu_btn = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((10, 540), (250, 50)),
+        relative_rect=pygame.Rect((245, 500), (310, 60)),
         text='Вернуться в меню',
         manager=manager
     )
