@@ -6,6 +6,8 @@ import pygame_gui
 import csv
 import sqlite3
 
+from game_process import game_process
+
 
 pygame.init()
 
@@ -132,27 +134,30 @@ def start_menu():
         pygame.display.update()
 
 
-def draw_planets(pliton, teptune, buran, maturne, jupater,
-                 mors, kemlya, veneda, merciry, salonce):
-    screen.blit(pliton, (50, 50))
-    screen.blit(teptune, (50, 200))
-    screen.blit(buran, (50, 350))
-    screen.blit(maturne, (185, 50))
-    screen.blit(jupater, (200, 200))
-    screen.blit(mors, (200, 350))
-    screen.blit(kemlya, (350, 50))
-    screen.blit(veneda, (350, 200))
-    screen.blit(merciry, (350, 350))
-    screen.blit(salonce, (515, 325))
+def draw_planets(images, sizes):
+    screen.blit(images[0], sizes[0])
+    screen.blit(images[1], sizes[1])
+    screen.blit(images[2], sizes[2])
+    screen.blit(images[3], sizes[3])
+    screen.blit(images[4], sizes[4])
+    screen.blit(images[5], sizes[5])
+    screen.blit(images[6], sizes[6])
+    screen.blit(images[7], sizes[7])
+    screen.blit(images[8], sizes[8])
+    screen.blit(images[9], sizes[9])
+
+
+def draw_image_square(image, coords):
+    square = pygame.Surface(tuple(map(lambda x: x + 4, image.get_size())))
+    square.fill(pygame.Color("red"))
+    new_coords = tuple(map(lambda x: x - 2, coords))
+    screen.blit(square, new_coords)
 
 
 def select_level_menu():
     global LEVEL_OPENED
 
     time_delta = clock.tick(60) / 1000
-    planets = ["Плитон", "Тептун", "Буран", "Матурн", "Юпатер",
-               "Морс", "Кемля", "Венеда", "Меркирий", "Салонце (финал)"]
-
     bg = load_image("start_bg_without_logo.jpg")
     screen.blit(bg, (0, 0))
     pliton_im = load_image("pliton.png")
@@ -192,12 +197,21 @@ def select_level_menu():
         salonce_im = load_image("salonce_2.png")
     else:
         salonce_im = load_image("salonce_2_locked.png")
+
+    planets = ["Плитон", "Тептун", "Буран", "Матурн", "Юпатер",
+               "Морс", "Кемля", "Венеда", "Меркирий", "Салонце (финал)"]
+    planet_images = [pliton_im, teptune_im, buran_im, maturne_im, jupater_im,
+                     mors_im, kemlya_im, veneda_im, merciry_im, salonce_im]
+    planet_images_coords = [(50, 50), (50, 200), (50, 350), (185, 50), (200, 200),
+                            (200, 350), (350, 50), (350, 200), (350, 350), (515, 325)]
+
     planet_choose = pygame_gui.elements.ui_drop_down_menu.UIDropDownMenu(
         options_list=planets,
         starting_option=planets[LEVEL_OPENED - 1],
         relative_rect=pygame.Rect((500, 50), (200, 50)),
         manager=manager
     )
+    choosen_planet = "Плитон"
     start_level = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((60, 500), (310, 60)),
         text='Запустить уровень',
@@ -209,6 +223,7 @@ def select_level_menu():
         manager=manager
     )
     elements = [start_level, planet_choose, exit_to_menu_btn]
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -218,16 +233,27 @@ def select_level_menu():
                 if event.ui_element == exit_to_menu_btn:
                     kill_elements(elements)
                     return
+                if event.ui_element == start_level:
+                    kill_elements(elements)
+                    game_process(choosen_planet)
             if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
                 load_sound("button_hover_2.mp3")
             if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
-                print(event.text)
-                continue
+                choosen_planet = event.text
+                if planets.index(choosen_planet) <= LEVEL_OPENED - 1:
+                    start_level.enable()
+                else:
+                    start_level.disable()
             manager.process_events(event)
         manager.update(time_delta)
+
+        cur_p_index = planets.index(choosen_planet)
+        cur_p_image = planet_images[cur_p_index]
+        cur_p_coords = planet_images_coords[cur_p_index]
         screen.blit(bg, (0, 0))
-        draw_planets(pliton_im, teptune_im, buran_im, maturne_im, jupater_im,
-                     mors_im, kemlya_im, veneda_im, merciry_im, salonce_im)
+        draw_image_square(cur_p_image, cur_p_coords)
+        draw_planets(planet_images, planet_images_coords)
+
         manager.draw_ui(screen)
         pygame.display.update()
 
@@ -454,5 +480,6 @@ def stat_menu():
         pygame.display.update()
 
 
-start_menu()
-terminate()
+if __name__ == "__main__":
+    start_menu()
+    terminate()
