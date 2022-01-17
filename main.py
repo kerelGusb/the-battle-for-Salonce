@@ -6,12 +6,11 @@ import pygame_gui
 import csv
 import sqlite3
 
-from game_process import game_process
-
+from sprites import Background, MainCharacter
 
 pygame.init()
 
-FPS = 30
+FPS = 50
 SIZE = WIDTH, HEIGHT = 800, 600
 SOUND_VOLUME = 0.5
 CUR_SAVE = "save_1"
@@ -194,9 +193,9 @@ def select_level_menu():
     else:
         merciry_im = load_image("merciry_locked.png")
     if LEVEL_OPENED > 9:
-        salonce_im = load_image("salonce_2.png")
+        salonce_im = load_image("salonce.png")
     else:
-        salonce_im = load_image("salonce_2_locked.png")
+        salonce_im = load_image("salonce_locked.png")
 
     planets = ["Плитон", "Тептун", "Буран", "Матурн", "Юпатер",
                "Морс", "Кемля", "Венеда", "Меркирий", "Салонце (финал)"]
@@ -478,6 +477,58 @@ def stat_menu():
         manager.update(time_delta)
         manager.draw_ui(screen)
         pygame.display.update()
+
+
+def game_process(level):
+    pygame.mixer.music.load("data/sounds/battle.wav")
+    pygame.mixer.music.play(-1)
+    level_to_bg = {"Плитон": "pliton_bg.png",
+                   "Тептун": "teptune_bg.png",
+                   "Буран": "buran_bg.png",
+                   "Матурн": "maturne_bg.png",
+                   "Юпатер": "jupater_bg.png",
+                   "Морс": "mors_bg.png",
+                   "Кемля": "kemlya_bg.png",
+                   "Венеда": "veneda_bg.png",
+                   "Меркирий": "merciry_bg.png",
+                   "Салонце (финал)": "salonce_bg.png"}
+    all_sprites = pygame.sprite.Group()
+    Background(load_image(level_to_bg[level]), all_sprites)
+    main_char = MainCharacter(load_image("new_hero_ic_loop.png"), 4, 30, 255, 8, all_sprites)
+    is_back_to_menu = False
+    while True:
+        if is_back_to_menu:
+            return
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    main_char.move_to_up = True
+                if event.key == pygame.K_DOWN:
+                    main_char.move_to_down = True
+                if event.key == pygame.K_LEFT:
+                    main_char.move_to_left = True
+                if event.key == pygame.K_RIGHT:
+                    main_char.move_to_right = True
+                if event.key == pygame.K_ESCAPE:
+                    pause_menu()
+            if event.type == pygame.KEYUP:
+                if event.key == pygame.K_UP:
+                    main_char.move_to_up = False
+                if event.key == pygame.K_DOWN:
+                    main_char.move_to_down = False
+                if event.key == pygame.K_LEFT:
+                    main_char.move_to_left = False
+                if event.key == pygame.K_RIGHT:
+                    main_char.move_to_right = False
+        all_sprites.draw(screen)
+        all_sprites.update()
+        pygame.display.update()
+
+
+def pause_menu():
+    pass
 
 
 if __name__ == "__main__":
