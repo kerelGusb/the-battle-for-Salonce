@@ -5,8 +5,11 @@ import pygame
 import pygame_gui
 import csv
 import sqlite3
+import random
 
-from sprites import Background, MainCharacter
+
+from sprites import ALL_SPRITES, PLAYER_BULLET, ALIEN_SPRITES, ALIEN_BULLET_SPRITES
+from sprites import Background, MainCharacter, Enemy, Boss, MainCharBullet, AlienBullet
 
 pygame.init()
 
@@ -106,7 +109,12 @@ def start_menu():
         text='Выйти из игры',
         manager=manager
     )
-    elements = [start_game_btn, upload_game_btn, stat_btn, settings_btn, exit_game_btn]
+    label_1 = pygame_gui.elements.UITextBox(
+        relative_rect=pygame.Rect((550, 329), (225, 150)),
+        html_text="Управление:<br>Клавиши стрелок - перемещение<br>F - выстрел из пушки<br>ESC - пауза",
+        manager=manager
+    )
+    elements = [start_game_btn, upload_game_btn, stat_btn, settings_btn, exit_game_btn, label_1]
     time_delta = clock.tick(60) / 1000
     while True:
         screen.blit(start_bg, (0, 0))
@@ -489,20 +497,31 @@ def stat_menu():
 
 def game_process(level):
     load_music("battle.wav")
-    level_to_bg = {"Плитон": "pliton_bg.png",
-                   "Тептун": "teptune_bg.png",
-                   "Буран": "buran_bg.png",
-                   "Матурн": "maturne_bg.png",
-                   "Юпатер": "jupater_bg.png",
-                   "Морс": "mors_bg.png",
-                   "Кемля": "kemlya_bg.png",
-                   "Венеда": "veneda_bg.png",
-                   "Меркирий": "merciry_bg.png",
-                   "Салонце (финал)": "salonce_bg.png"}
-    all_sprites = pygame.sprite.Group()
-    Background(load_image(level_to_bg[level]), all_sprites)
-    main_char = MainCharacter(load_image("new_hero_ic_loop.png"), 4, 30, 255, 8, all_sprites)
+    # характеристики уровней: название файла фона, радиус выбора времени спавна врагов,
+    # убитых врагов для появления босса, кол-во hp у врагов, кол-во hp у босса
+    level_parameters = {
+                        "Плитон": ["pliton_bg.png", (1000, 3000), 10, 50, 1000],
+                        "Тептун": ["teptune_bg.png", (900, 2500), 12, 50, 1250],
+                        "Буран": ["buran_bg.png", (800, 2000), 15, 50, 1500],
+                        "Матурн": ["maturne_bg.png", (700, 1700), 17, 50, 1750],
+                        "Юпатер": ["jupater_bg.png", (650, 1500), 20, 50, 2000],
+                        "Морс": ["mors_bg.png", (600, 1300), 22, 100, 2250],
+                        "Кемля": ["kemlya_bg.png", (550, 1100), 25, 100, 2500],
+                        "Венеда": ["veneda_bg.png", (500, 1000), 27, 100, 2750],
+                        "Меркирий": ["merciry_bg.png", (450, 900), 30, 100, 3000],
+                        "Салонце (финал)": ["salonce_bg.png", (400, 800), 40, 100, 5000]
+                        }
+    enemy_ic_elems = {"enemy_ic_loop_1_16.png": 16,
+                      "enemy_ic_loop_2_6.png": 6,
+                      "enemy_ic_loop_3_4.png": 4}
+    cur_lvl_par = level_parameters[level]
+    Background(load_image(cur_lvl_par[0]), ALL_SPRITES)
+    main_char = MainCharacter(load_image("new_hero_ic_loop.png"), 4, 30, 255, 8, [102, 43], ALL_SPRITES)
+    enemies = []
     is_back_to_menu = False
+    start_ticks = pygame.time.get_ticks()
+    time_distance = random.randint(*cur_lvl_par[1])
+    spawned_aliens = 0
     while True:
         if is_back_to_menu:
             return
@@ -520,6 +539,9 @@ def game_process(level):
                     main_char.move_to_right = True
                 if event.key == pygame.K_ESCAPE:
                     is_back_to_menu = pause_menu()
+                if event.key == pygame.K_f:
+                    MainCharBullet(load_image("bullet_player.png"), 4,
+                                   *main_char.shot_bullet_pos, 15, ALL_SPRITES, PLAYER_BULLET)
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_UP:
                     main_char.move_to_up = False
@@ -529,8 +551,20 @@ def game_process(level):
                     main_char.move_to_left = False
                 if event.key == pygame.K_RIGHT:
                     main_char.move_to_right = False
-        all_sprites.draw(screen)
-        all_sprites.update()
+        if time_distance < (pygame.time.get_ticks() - start_ticks):
+            rand_enemy_ic_name = random.choice(["enemy_ic_loop_1_16.png",
+                                                "enemy_ic_loop_2_6.png",
+                                                "enemy_ic_loop_3_4.png"])
+            enemy_ic = load_image(rand_enemy_ic_name)
+            enemy = Enemy(enemy_ic, enemy_ic_elems[rand_enemy_ic_name], 800,
+                          random.randint(0, 600 - enemy_ic.get_height()),
+                          random.randint(8, 16), [-20, enemy_ic.get_height() // 2 - 2],
+                          cur_lvl_par[3], ALL_SPRITES, ALIEN_SPRITES)
+            enemies.append(enemy)
+            time_distance = random.randint(*cur_lvl_par[1])
+            start_ticks = pygame.time.get_ticks()
+        ALL_SPRITES.draw(screen)
+        ALL_SPRITES.update()
         pygame.display.update()
 
 
@@ -568,8 +602,17 @@ def pause_menu():
                     parameters()
                     show_elements(elements)
                 if event.ui_element == exit_to_menu_btn:
-                    kill_elements(elements)
-                    return True
+                    pygame_gui.windows.UIConfirmationDialog(
+                        rect=pygame.Rect((250, 200), (300, 200)),
+                        manager=manager,
+                        window_title="Предупреждение",
+                        action_long_desc=f"Вы хотите выйти? Несохраненные данные будут утеряны.",
+                        action_short_name='OK',
+                        blocking=True
+                    )
+            if event.type == pygame_gui.UI_CONFIRMATION_DIALOG_CONFIRMED:
+                kill_elements(elements)
+                return True
             manager.process_events(event)
         manager.update(time_delta)
         screen.blit(bg, (0, 0))
