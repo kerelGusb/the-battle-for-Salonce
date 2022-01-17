@@ -10,9 +10,8 @@ from sprites import Background, MainCharacter
 
 pygame.init()
 
-FPS = 50
 SIZE = WIDTH, HEIGHT = 800, 600
-SOUND_VOLUME = 0.5
+MUSIC_VOLUME = SOUND_VOLUME = 0.5
 CUR_SAVE = "save_1"
 LEVEL_OPENED = 1
 
@@ -53,6 +52,12 @@ def load_sound(name):
     sound.set_volume(SOUND_VOLUME)
 
 
+def load_music(name):
+    pygame.mixer.music.load("data/sounds/" + name)
+    pygame.mixer.music.set_volume(MUSIC_VOLUME)
+    pygame.mixer.music.play(-1)
+
+
 def hide_elements(elems):
     for elem in elems:
         elem.hide()
@@ -70,13 +75,11 @@ def kill_elements(elems):
 
 
 def start_menu():
-    pygame.mixer.music.load("data/sounds/menu.wav")
-    pygame.mixer.music.set_volume(0.5)
-    pygame.mixer.music.play(-1)
+    load_music("menu.wav")
 
     screen.fill(pygame.Color("black"))
-    start_logo = load_image("start_bg_2.jpg")
-    screen.blit(start_logo, (0, 0))
+    start_bg = load_image("start_bg_2.jpg")
+    screen.blit(start_bg, (0, 0))
 
     start_game_btn = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((275, 275), (250, 50)),
@@ -104,9 +107,9 @@ def start_menu():
         manager=manager
     )
     elements = [start_game_btn, upload_game_btn, stat_btn, settings_btn, exit_game_btn]
+    time_delta = clock.tick(60) / 1000
     while True:
-        screen.blit(start_logo, (0, 0))
-        time_delta = clock.tick(60) / 1000
+        screen.blit(start_bg, (0, 0))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
@@ -124,7 +127,7 @@ def start_menu():
                 elif event.ui_element == exit_game_btn:
                     terminate()
                 show_elements(elements)
-                screen.blit(start_logo, (0, 0))
+                screen.blit(start_bg, (0, 0))
             if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
                 load_sound("button_hover_2.mp3")
             manager.process_events(event)
@@ -156,7 +159,6 @@ def draw_image_square(image, coords):
 def select_level_menu():
     global LEVEL_OPENED
 
-    time_delta = clock.tick(60) / 1000
     bg = load_image("start_bg_without_logo.jpg")
     screen.blit(bg, (0, 0))
     pliton_im = load_image("pliton.png")
@@ -223,6 +225,7 @@ def select_level_menu():
     )
     elements = [start_level, planet_choose, exit_to_menu_btn]
 
+    time_delta = clock.tick(60) / 1000
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -233,8 +236,10 @@ def select_level_menu():
                     kill_elements(elements)
                     return
                 if event.ui_element == start_level:
-                    kill_elements(elements)
+                    hide_elements(elements)
                     game_process(choosen_planet)
+                    load_music("menu.wav")
+                    show_elements(elements)
             if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
                 load_sound("button_hover_2.mp3")
             if event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
@@ -321,8 +326,8 @@ def upload_game_menu(mode):
                     load_9: 'save_9',
                     load_10: 'save_10'}
     temp_save = "save_1"
+    time_delta = clock.tick(60) / 1000
     while True:
-        time_delta = clock.tick(60) / 1000
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
@@ -331,7 +336,7 @@ def upload_game_menu(mode):
                 if event.ui_element in elements:
                     if event.ui_element != exit_to_menu_btn:
                         temp_save = save_to_file[event.ui_element]
-                        confirmation_dialog = pygame_gui.windows.UIConfirmationDialog(
+                        pygame_gui.windows.UIConfirmationDialog(
                             rect=pygame.Rect((250, 200), (300, 200)),
                             manager=manager,
                             window_title="Подтверждение",
@@ -358,6 +363,7 @@ def upload_game_menu(mode):
 
 
 def parameters():
+    global MUSIC_VOLUME
     global SOUND_VOLUME
 
     bg = load_image("start_bg_without_logo.jpg")
@@ -376,14 +382,14 @@ def parameters():
         relative_rect=pygame.Rect((430, 25), (310, 50)),
         start_value=pygame.mixer.music.get_volume() * 100,
         value_range=(0, 100),
-        click_increment=5,
+        click_increment=2,
         manager=manager
     )
     sound_volume_scr_bar = pygame_gui.elements.UIHorizontalSlider(
         relative_rect=pygame.Rect((430, 105), (310, 50)),
         start_value=SOUND_VOLUME * 100,
         value_range=(0, 100),
-        click_increment=5,
+        click_increment=2,
         manager=manager
     )
     exit_to_menu_btn = pygame_gui.elements.UIButton(
@@ -393,12 +399,12 @@ def parameters():
     )
     elements = [label_1, label_2, music_volume_scr_bar,
                 sound_volume_scr_bar, exit_to_menu_btn]
+    time_delta = clock.tick(60) / 1000
     while True:
-        music_volume = music_volume_scr_bar.get_current_value()
+        MUSIC_VOLUME = music_volume_scr_bar.get_current_value() / 100
         SOUND_VOLUME = sound_volume_scr_bar.get_current_value() / 100
-        pygame.mixer.music.set_volume(music_volume / 100)
+        pygame.mixer.music.set_volume(MUSIC_VOLUME)
 
-        time_delta = clock.tick(60) / 1000
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
@@ -412,6 +418,8 @@ def parameters():
                     load_sound("button_hover_2.mp3")
             manager.process_events(event)
         manager.update(time_delta)
+        screen.blit(bg, (0, 0))
+        clock.tick(30)
         manager.draw_ui(screen)
         pygame.display.update()
 
@@ -480,8 +488,7 @@ def stat_menu():
 
 
 def game_process(level):
-    pygame.mixer.music.load("data/sounds/battle.wav")
-    pygame.mixer.music.play(-1)
+    load_music("battle.wav")
     level_to_bg = {"Плитон": "pliton_bg.png",
                    "Тептун": "teptune_bg.png",
                    "Буран": "buran_bg.png",
@@ -512,7 +519,7 @@ def game_process(level):
                 if event.key == pygame.K_RIGHT:
                     main_char.move_to_right = True
                 if event.key == pygame.K_ESCAPE:
-                    pause_menu()
+                    is_back_to_menu = pause_menu()
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_UP:
                     main_char.move_to_up = False
@@ -528,7 +535,46 @@ def game_process(level):
 
 
 def pause_menu():
-    pass
+    bg = load_image("start_bg_without_logo.jpg")
+    screen.blit(bg, (0, 0))
+
+    back_to_game_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((250, 160), (300, 80)),
+        text="Вернуться в игру", manager=manager
+    )
+    settings_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((250, 255), (300, 80)),
+        text="Параметры", manager=manager
+    )
+    exit_to_menu_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((250, 350), (300, 80)),
+        text="Выйти в меню", manager=manager
+    )
+    elements = [back_to_game_btn, settings_btn, exit_to_menu_btn]
+    while True:
+        time_delta = clock.tick(60) / 1000
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
+                load_sound("button_hover_2.mp3")
+            if event.type == pygame_gui.UI_BUTTON_PRESSED:
+                load_sound("button_clicked.mp3")
+                if event.ui_element == back_to_game_btn:
+                    kill_elements(elements)
+                    return False
+                if event.ui_element == settings_btn:
+                    hide_elements(elements)
+                    parameters()
+                    show_elements(elements)
+                if event.ui_element == exit_to_menu_btn:
+                    kill_elements(elements)
+                    return True
+            manager.process_events(event)
+        manager.update(time_delta)
+        screen.blit(bg, (0, 0))
+        manager.draw_ui(screen)
+        pygame.display.update()
 
 
 if __name__ == "__main__":
