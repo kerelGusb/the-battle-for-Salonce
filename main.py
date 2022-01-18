@@ -11,6 +11,7 @@ import random
 from sprites import ALL_SPRITES, PLAYER_BULLET, ALIEN_SPRITES, ALIEN_BULLET_SPRITES
 from sprites import Background, MainCharacter, Enemy, Boss, MainCharBullet, AlienBullet
 
+
 pygame.init()
 
 SIZE = WIDTH, HEIGHT = 800, 600
@@ -245,7 +246,10 @@ def select_level_menu():
                     return
                 if event.ui_element == start_level:
                     hide_elements(elements)
-                    game_process(choosen_planet)
+                    do_next_level = game_process(choosen_planet)
+                    while do_next_level:
+                        choosen_planet = planets[planets.index(choosen_planet) + 1]  # название следующего уровня
+                        do_next_level = game_process(choosen_planet)
                     load_music("menu.wav")
                     show_elements(elements)
             if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
@@ -345,7 +349,7 @@ def upload_game_menu(mode):
                     if event.ui_element != exit_to_menu_btn:
                         temp_save = save_to_file[event.ui_element]
                         pygame_gui.windows.UIConfirmationDialog(
-                            rect=pygame.Rect((250, 200), (300, 200)),
+                            rect=pygame.Rect((250, 200), (300, 150)),
                             manager=manager,
                             window_title="Подтверждение",
                             action_long_desc=f"Загрузить сохранение {temp_save.split('_')[1]}?",
@@ -516,15 +520,25 @@ def game_process(level):
                       "enemy_ic_loop_3_4.png": 4}
     cur_lvl_par = level_parameters[level]
     Background(load_image(cur_lvl_par[0]), ALL_SPRITES)
-    main_char = MainCharacter(load_image("new_hero_ic_loop.png"), 4, 30, 255, 8, [102, 43], ALL_SPRITES)
+    main_char = MainCharacter(load_image("new_hero_ic_loop_hit_2.png"), 4, 30, 255, 8, [102, 43], ALL_SPRITES)
     enemies = []
     is_back_to_menu = False
+    is_next_lvl = False
     start_ticks = pygame.time.get_ticks()
     time_distance = random.randint(*cur_lvl_par[1])
-    spawned_aliens = 0
+    points = 0
+    player_shots = 0
+    killed_enemies = 0
+    bonus_value = 0
     while True:
         if is_back_to_menu:
-            return
+            for sprite in ALL_SPRITES.sprites():
+                sprite.kill()
+            return False
+        if is_next_lvl:
+            for sprite in ALL_SPRITES.sprites():
+                sprite.kill()
+            return True
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
@@ -540,8 +554,10 @@ def game_process(level):
                 if event.key == pygame.K_ESCAPE:
                     is_back_to_menu = pause_menu()
                 if event.key == pygame.K_f:
+                    load_sound("shot_sound.wav")
                     MainCharBullet(load_image("bullet_player.png"), 4,
                                    *main_char.shot_bullet_pos, 15, ALL_SPRITES, PLAYER_BULLET)
+                    player_shots += 1
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_UP:
                     main_char.move_to_up = False
@@ -563,8 +579,89 @@ def game_process(level):
             enemies.append(enemy)
             time_distance = random.randint(*cur_lvl_par[1])
             start_ticks = pygame.time.get_ticks()
+        if main_char.hp <= 0:
+            is_next_lvl, is_back_to_menu = game_end(level, False, cur_lvl_par[2], points,
+                                                    player_shots, killed_enemies)
+        if False:  # босс убит
+            is_next_lvl, is_back_to_menu = game_end(level, True, cur_lvl_par[2], points,
+                                                    player_shots, killed_enemies)
         ALL_SPRITES.draw(screen)
         ALL_SPRITES.update()
+        pygame.display.update()
+
+
+def game_end(level, is_player_won, need_to_kill_value,
+             player_points, player_shots, killed_enemies):
+    load_music("level_end.mp3")
+    if is_player_won:
+        bg = load_image("you_won_bg.png")
+    else:
+        bg = load_image("game_over_bg.png")
+    screen.blit(bg, (0, 0))
+
+    label_1 = pygame_gui.elements.UILabel(
+        relative_rect=pygame.Rect((40, 175), (340, 90)),
+        text=f"Убитых врагов: {killed_enemies} из {need_to_kill_value}",
+        manager=manager
+    )
+    label_2 = pygame_gui.elements.UILabel(
+        relative_rect=pygame.Rect((40, 280), (340, 90)),
+        text=f"Выстрелов сделано: {player_shots}",
+        manager=manager
+    )
+    label_3 = pygame_gui.elements.UILabel(
+        relative_rect=pygame.Rect((40, 385), (340, 90)),
+        text=f"Получено очков: {player_points}",
+        manager=manager
+    )
+
+    next_lvl_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((420, 175), (340, 90)),
+        text="Следующий уровень", manager=manager
+    )
+    return_lvl_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((420, 175), (340, 90)),
+        text="Повторить попытку", manager=manager
+    )
+    settings_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((420, 280), (340, 90)),
+        text="Параметры", manager=manager
+    )
+    exit_to_lvls_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((420, 385), (340, 90)),
+        text="Выйти в меню", manager=manager
+    )
+    if level == "Салонце (финал)":
+        next_lvl_btn.disable()
+    if is_player_won:
+        return_lvl_btn.hide()
+    else:
+        next_lvl_btn.hide()
+    elements = [label_1, label_2, label_3, next_lvl_btn,
+                return_lvl_btn, settings_btn, exit_to_lvls_btn]
+    while True:
+        time_delta = clock.tick(60) / 1000
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
+                load_sound("button_hover_2.mp3")
+            if event.type == pygame_gui.UI_BUTTON_PRESSED:
+                load_sound("button_clicked.mp3")
+                if event.ui_element == next_lvl_btn:
+                    kill_elements(elements)
+                    return True, False
+                if event.ui_element == settings_btn:
+                    hide_elements(elements)
+                    parameters()
+                    show_elements(elements)
+                if event.ui_element == exit_to_lvls_btn:
+                    kill_elements(elements)
+                    return False, True
+            manager.process_events(event)
+        manager.update(time_delta)
+        screen.blit(bg, (0, 0))
+        manager.draw_ui(screen)
         pygame.display.update()
 
 
@@ -602,17 +699,8 @@ def pause_menu():
                     parameters()
                     show_elements(elements)
                 if event.ui_element == exit_to_menu_btn:
-                    pygame_gui.windows.UIConfirmationDialog(
-                        rect=pygame.Rect((250, 200), (300, 200)),
-                        manager=manager,
-                        window_title="Предупреждение",
-                        action_long_desc=f"Вы хотите выйти? Несохраненные данные будут утеряны.",
-                        action_short_name='OK',
-                        blocking=True
-                    )
-            if event.type == pygame_gui.UI_CONFIRMATION_DIALOG_CONFIRMED:
-                kill_elements(elements)
-                return True
+                    kill_elements(elements)
+                    return True
             manager.process_events(event)
         manager.update(time_delta)
         screen.blit(bg, (0, 0))

@@ -1,6 +1,5 @@
 import os
 import pygame
-import random
 
 
 ALL_SPRITES = pygame.sprite.Group()
@@ -41,14 +40,12 @@ class Background(pygame.sprite.Sprite):
 class Ship(pygame.sprite.Sprite):
     def __init__(self, sheet, columns, x, y, v, start_bullet_pos, *group):
         super().__init__(*group)
-        self.frames = []
-        self.cut_sheet(sheet, columns)
-        self.cur_frame = 0
-        self.image = self.frames[self.cur_frame]
-        self.rect = self.image.get_rect().move(x, y)
         self.pos = [x, y]
         self.v = v
         self.start_bullet_pos = start_bullet_pos
+        self.set_image(sheet, columns, *self.pos)
+        self.mask = pygame.mask.from_surface(self.image)
+
         self.shot_bullet_pos = [self.pos[0] + start_bullet_pos[0],
                                 self.pos[1] + start_bullet_pos[1]]
         self.add(ALL_SPRITES)
@@ -61,9 +58,17 @@ class Ship(pygame.sprite.Sprite):
             self.frames.append(sheet.subsurface(pygame.Rect(
                 frame_location, self.rect.size)))
 
+    def set_image(self, sheet, columns, x, y):
+        self.frames = []
+        self.cut_sheet(sheet, columns)
+        self.cur_frame = 0
+        self.image = self.frames[self.cur_frame]
+        self.rect = self.image.get_rect().move(x, y)
+
     def update(self):
         self.cur_frame = (self.cur_frame + 1) % len(self.frames)
         self.image = self.frames[self.cur_frame]
+        self.mask = pygame.mask.from_surface(self.image)
         self.shot_bullet_pos = [self.pos[0] + self.start_bullet_pos[0],
                                 self.pos[1] + self.start_bullet_pos[1]]
 
@@ -76,11 +81,14 @@ class MainCharacter(Ship):
         self.move_to_left = False
         self.move_to_right = False
         self.hp = 150
+        self.harmless = True  # неуязвимость после удара
+        self.start_ticks = pygame.time.get_ticks()
         self.add(ALL_SPRITES)
 
     def update(self):
         self.cur_frame = (self.cur_frame + 1) % len(self.frames)
         self.image = self.frames[self.cur_frame]
+        self.mask = pygame.mask.from_surface(self.image)
         self.shot_bullet_pos = [self.pos[0] + self.start_bullet_pos[0],
                                 self.pos[1] + self.start_bullet_pos[1]]
         if self.move_to_up:
@@ -95,12 +103,27 @@ class MainCharacter(Ship):
         if self.move_to_right:
             self.pos[0] += self.v
             self.rect = self.rect.move((self.v, 0))
+        if self.harmless:
+            if pygame.time.get_ticks() - self.start_ticks > 2000:
+                self.set_image(load_image("new_hero_ic_loop.png"), 4, *self.pos)
+                self.harmless = False
         ship_collide = pygame.sprite.spritecollideany(self, ALIEN_SPRITES)
         if ship_collide:
-            self.hp -= 50
+            print(ship_collide.groups())
+            if pygame.sprite.collide_mask(self, ship_collide):
+                if not self.harmless:
+                    self.get_hit()
         bullet_collide = pygame.sprite.spritecollideany(self, ALIEN_BULLET_SPRITES)
         if bullet_collide:
-            self.hp -= 50
+            if pygame.sprite.collide_mask(self, bullet_collide):
+                if not self.harmless:
+                    self.get_hit()
+
+    def get_hit(self):
+        self.hp -= 50
+        self.start_ticks = pygame.time.get_ticks()
+        self.harmless = True
+        self.set_image(load_image("new_hero_ic_loop_hit.png"), 4, *self.pos)
 
 
 class Enemy(Ship):
@@ -112,10 +135,13 @@ class Enemy(Ship):
     def update(self):
         self.cur_frame = (self.cur_frame + 1) % len(self.frames)
         self.image = self.frames[self.cur_frame]
+        self.mask = pygame.mask.from_surface(self.image)
         self.shot_bullet_pos = [self.pos[0] + self.start_bullet_pos[0],
                                 self.pos[1] + self.start_bullet_pos[1]]
         self.pos[0] -= self.v
         self.rect = self.rect.move((-self.v, 0))
+        if self.pos[0] < -100:
+            self.kill()
 
 
 class Boss(Enemy):
@@ -157,6 +183,8 @@ class AlienBullet(Bullet):
         self.image = self.frames[self.cur_frame]
         self.pos[0] -= self.v
         self.rect = self.rect.move((-self.v, 0))
+        if self.pos[0] > 900:
+            self.kill()
 
 
 class MainCharBullet(Bullet):
@@ -168,4 +196,5 @@ class MainCharBullet(Bullet):
         self.image = self.frames[self.cur_frame]
         self.pos[0] += self.v
         self.rect = self.rect.move((self.v, 0))
-
+        if self.pos[0] > 900:
+            self.kill()
