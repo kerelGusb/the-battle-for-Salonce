@@ -3,20 +3,26 @@ import sys
 import pygame
 import pygame_gui
 import csv
+import sqlite3
 import random
 
 
-from sprites import ALL_SPRITES, PLAYER_BULLET, ALIEN_SPRITES, ALIEN_BULLET_SPRITES, BONUSES, HEARTS
-from sprites import Background, MainCharacter, Enemy, Boss, MainCharBullet, AlienBullet, Heart, Battery
+from sprites import ALL_SPRITES, PLAYER_BULLET, ALIEN_SPRITES, HEARTS
+from sprites import Background, MainCharacter, Enemy, Boss, MainCharBullet, Heart, Battery
 from sprites import load_image
 
 
 pygame.init()
 
+con = sqlite3.connect("data/game_data.db")
+cur = con.cursor()
+
 SIZE = WIDTH, HEIGHT = 800, 600
 MUSIC_VOLUME = SOUND_VOLUME = 0.5
-CUR_SAVE = "save_1"
-LEVEL_OPENED = 1
+CUR_SAVE = cur.execute("""SELECT save_index FROM game_saves WHERE is_running = 'True'""").fetchone()[0]
+with open(f'data/saves/{CUR_SAVE}.csv', encoding="utf8") as csvfile:
+    LEVEL_OPENED = int(list(csv.reader(csvfile, delimiter=';', quotechar='"'))[1][1])
+LEVEL_COMPLETED = LEVEL_OPENED - 1
 
 screen = pygame.display.set_mode(SIZE)
 pygame.display.set_caption("Битва за Салонце")
@@ -91,12 +97,18 @@ def start_menu():
         text='Выйти из игры',
         manager=manager
     )
-    label_1 = pygame_gui.elements.UITextBox(
+    textbox_1 = pygame_gui.elements.UITextBox(
         relative_rect=pygame.Rect((550, 329), (225, 150)),
         html_text="Управление:<br>Клавиши стрелок - перемещение<br>F - выстрел из пушки<br>ESC - пауза",
         manager=manager
     )
-    elements = [start_game_btn, upload_game_btn, stat_btn, settings_btn, exit_game_btn, label_1]
+    textbox_2 = pygame_gui.elements.UITextBox(
+        relative_rect=pygame.Rect((25, 329), (225, 150)),
+        html_text=f"На Салонечную систему<br>напали захватчики,<br>и только вы "
+                  f"можете их <br>остановить!",
+        manager=manager
+    )
+    elements = [start_game_btn, upload_game_btn, stat_btn, settings_btn, exit_game_btn, textbox_1, textbox_2]
     time_delta = clock.tick(60) / 1000
     while True:
         screen.blit(start_bg, (0, 0))
@@ -109,7 +121,7 @@ def start_menu():
                 if event.ui_element == start_game_btn:
                     select_level_menu()
                 elif event.ui_element == upload_game_btn:
-                    upload_game_menu("load")
+                    upload_game_menu()
                 elif event.ui_element == stat_btn:
                     stat_menu()
                 elif event.ui_element == settings_btn:
@@ -146,11 +158,7 @@ def draw_image_square(image, coords):
     screen.blit(square, new_coords)
 
 
-def select_level_menu():
-    global LEVEL_OPENED
-
-    bg = load_image("start_bg_without_logo.jpg")
-    screen.blit(bg, (0, 0))
+def check_planet_open():
     pliton_im = load_image("pliton.png")
     if LEVEL_OPENED > 1:
         teptune_im = load_image("Teptune.png")
@@ -188,11 +196,20 @@ def select_level_menu():
         salonce_im = load_image("salonce.png")
     else:
         salonce_im = load_image("salonce_locked.png")
+    planet_images = [pliton_im, teptune_im, buran_im, maturne_im, jupater_im,
+                     mors_im, kemlya_im, veneda_im, merciry_im, salonce_im]
+    return planet_images
+
+
+def select_level_menu():
+    global LEVEL_OPENED
+    global LEVEL_COMPLETED
+
+    bg = load_image("start_bg_without_logo.jpg")
+    screen.blit(bg, (0, 0))
 
     planets = ["Плитон", "Тептун", "Буран", "Матурн", "Юпатер",
                "Морс", "Кемля", "Венеда", "Меркирий", "Салонце (финал)"]
-    planet_images = [pliton_im, teptune_im, buran_im, maturne_im, jupater_im,
-                     mors_im, kemlya_im, veneda_im, merciry_im, salonce_im]
     planet_images_coords = [(50, 50), (50, 200), (50, 350), (185, 50), (200, 200),
                             (200, 350), (350, 50), (350, 200), (350, 350), (515, 325)]
     choosen_planet = "Плитон"
@@ -226,10 +243,19 @@ def select_level_menu():
                     return
                 if event.ui_element == start_level:
                     hide_elements(elements)
-                    do_next_level = game_process(choosen_planet)
-                    while do_next_level:
-                        choosen_planet = planets[planets.index(choosen_planet) + 1]  # название следующего уровня
-                        do_next_level = game_process(choosen_planet)
+                    cur_choosen_planet = choosen_planet
+                    do_next_level, do_return_to_menu, do_repeat_level = game_process(cur_choosen_planet, planets)
+                    while not do_return_to_menu:
+                        LEVEL_OPENED = LEVEL_COMPLETED + 1
+                        if do_next_level:
+                            cur_choosen_planet = planets[planets.index(cur_choosen_planet) + 1]
+                            do_next_level, do_return_to_menu, do_repeat_level = \
+                                game_process(cur_choosen_planet, planets)
+                        elif do_repeat_level:
+                            do_next_level, do_return_to_menu, do_repeat_level = \
+                                game_process(cur_choosen_planet, planets)
+                    LEVEL_OPENED = LEVEL_COMPLETED + 1
+
                     load_music("menu.wav")
                     show_elements(elements)
             if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
@@ -243,6 +269,8 @@ def select_level_menu():
             manager.process_events(event)
         manager.update(time_delta)
 
+        planet_images = check_planet_open()
+
         cur_p_index = planets.index(choosen_planet)
         cur_p_image = planet_images[cur_p_index]
         cur_p_coords = planet_images_coords[cur_p_index]
@@ -254,59 +282,65 @@ def select_level_menu():
         pygame.display.update()
 
 
-def upload_game_menu(mode):
+def upload_game_menu():
     global CUR_SAVE
     global LEVEL_OPENED
 
     bg = load_image("start_bg_without_logo.jpg")
     screen.blit(bg, (0, 0))
 
+    save_names = cur.execute("""SELECT save_name FROM game_saves""").fetchall()
+
     load_1 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((50, 20), (300, 75)),
-        text='Слот сохранения 1', manager=manager
+        text=save_names[0][0], manager=manager
     )
     load_2 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((50, 120), (300, 75)),
-        text='Слот сохранения 2', manager=manager
+        text=save_names[1][0], manager=manager
     )
     load_3 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((50, 220), (300, 75)),
-        text='Слот сохранения 3', manager=manager
+        text=save_names[2][0], manager=manager
     )
     load_4 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((50, 320), (300, 75)),
-        text='Слот сохранения 4', manager=manager
+        text=save_names[3][0], manager=manager
     )
     load_5 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((50, 420), (300, 75)),
-        text='Слот сохранения 5', manager=manager
+        text=save_names[4][0], manager=manager
     )
     load_6 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((450, 20), (300, 75)),
-        text='Слот сохранения 6', manager=manager
+        text=save_names[5][0], manager=manager
     )
     load_7 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((450, 120), (300, 75)),
-        text='Слот сохранения 7', manager=manager
+        text=save_names[6][0], manager=manager
     )
     load_8 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((450, 220), (300, 75)),
-        text='Слот сохранения 8', manager=manager
+        text=save_names[7][0], manager=manager
     )
     load_9 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((450, 320), (300, 75)),
-        text='Слот сохранения 9', manager=manager
+        text=save_names[8][0], manager=manager
     )
     load_10 = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((450, 420), (300, 75)),
-        text='Слот сохранения 10', manager=manager
+        text=save_names[9][0], manager=manager
     )
     exit_to_menu_btn = pygame_gui.elements.UIButton(
-        relative_rect=pygame.Rect((250, 520), (300, 60)),
+        relative_rect=pygame.Rect((450, 515), (300, 65)),
         text='Вернуться в меню', manager=manager
     )
+    label_1 = pygame_gui.elements.UILabel(
+        relative_rect=pygame.Rect((50, 515), (300, 65)),
+        text=f'Текущее сохранение: {CUR_SAVE.split("_")[1]}', manager=manager
+    )
     elements = [load_1, load_2, load_3, load_4, load_5,
-                load_6, load_7, load_8, load_9, load_10, exit_to_menu_btn]
+                load_6, load_7, load_8, load_9, load_10, exit_to_menu_btn, label_1]
     save_to_file = {load_1: 'save_1',
                     load_2: 'save_2',
                     load_3: 'save_3',
@@ -317,7 +351,7 @@ def upload_game_menu(mode):
                     load_8: 'save_8',
                     load_9: 'save_9',
                     load_10: 'save_10'}
-    temp_save = "save_1"
+    temp_save = CUR_SAVE
     time_delta = clock.tick(60) / 1000
     while True:
         for event in pygame.event.get():
@@ -343,10 +377,13 @@ def upload_game_menu(mode):
                 if event.ui_element in elements:
                     load_sound("button_hover_2.mp3")
             if event.type == pygame_gui.UI_CONFIRMATION_DIALOG_CONFIRMED:
+                cur.execute(f"""UPDATE game_saves SET is_running = 'False' WHERE save_index = '{CUR_SAVE}'""")
                 CUR_SAVE = temp_save
+                cur.execute(f"""UPDATE game_saves SET is_running = 'True' WHERE save_index = '{CUR_SAVE}'""")
+                con.commit()
                 with open(f'data/saves/{CUR_SAVE}.csv', encoding="utf8") as csvfile:
-                    if mode == "load":
-                        LEVEL_OPENED = int(list(csv.reader(csvfile, delimiter=';', quotechar='"'))[1][1])
+                    LEVEL_OPENED = int(list(csv.reader(csvfile, delimiter=';', quotechar='"'))[1][1])
+                label_1.set_text(f'Текущее сохранение: {CUR_SAVE.split("_")[1]}')
             manager.process_events(event)
         manager.update(time_delta)
         screen.blit(bg, (0, 0))
@@ -418,6 +455,7 @@ def parameters():
 
 def stat_menu():
     global CUR_SAVE
+    global LEVEL_OPENED
 
     bg = load_image("start_bg_without_logo.jpg")
     screen.blit(bg, (0, 0))
@@ -441,12 +479,12 @@ def stat_menu():
         )
         label_accuracy = pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect((435, 160), (295, 60)),
-            text=f"Точность: {settings[3][1]}%",
+            text=f"Точность: {int(float(settings[3][1]) * 100)}%",
             manager=manager
         )
-        label_bonus_value = pygame_gui.elements.UILabel(
+        label_good_shots_value = pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect((70, 280), (295, 60)),
-            text=f"Бонусов активировано: {settings[4][1]}",
+            text=f"Выстрелов попало: {settings[4][1]}",
             manager=manager
         )
         label_points_value = pygame_gui.elements.UILabel(
@@ -454,13 +492,18 @@ def stat_menu():
             text=f"Очков получено: {settings[5][1]}",
             manager=manager
         )
+    delete_save_btn = pygame_gui.elements.UIButton(
+        relative_rect=pygame.Rect((245, 400), (310, 60)),
+        text=f'Обнулить сохранение {CUR_SAVE.split("_")[1]}',
+        manager=manager
+    )
     exit_to_menu_btn = pygame_gui.elements.UIButton(
         relative_rect=pygame.Rect((245, 500), (310, 60)),
         text='Вернуться в меню',
         manager=manager
     )
     elements = [label_level_opened, label_killed_ships, label_shots_value,
-                label_accuracy, label_bonus_value, label_points_value, exit_to_menu_btn]
+                label_accuracy, label_good_shots_value, label_points_value, exit_to_menu_btn, delete_save_btn]
     while True:
         time_delta = clock.tick(60) / 1000
         for event in pygame.event.get():
@@ -471,31 +514,60 @@ def stat_menu():
                 if event.ui_element == exit_to_menu_btn:
                     kill_elements(elements)
                     return
+                if event.ui_element == delete_save_btn:
+                    pygame_gui.windows.UIConfirmationDialog(
+                        rect=pygame.Rect((250, 200), (300, 200)),
+                        manager=manager,
+                        window_title="Подтверждение",
+                        action_long_desc=f"Обнулить сохранение {CUR_SAVE.split('_')[1]}?",
+                        action_short_name='OK',
+                        blocking=True
+                    )
             if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
                 load_sound("button_hover_2.mp3")
+            if event.type == pygame_gui.UI_CONFIRMATION_DIALOG_CONFIRMED:
+                with open(f'data/saves/{CUR_SAVE}.csv', 'w', newline='') as csvfile:
+                    csvfile.truncate()
+                    writer = csv.writer(
+                        csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                    writer.writerow(['set_name', 'value'])
+                    writer.writerow(['levels_opened', 1])
+                    label_level_opened.set_text("Уровней пройдено: 0")
+                    writer.writerow(['killed_ships', 0])
+                    label_killed_ships.set_text("Кораблей убито: 0")
+                    writer.writerow(['shots_value', 0])
+                    label_shots_value.set_text("Выстрелов сделано: 0")
+                    writer.writerow(['accuracy', 1])
+                    label_accuracy.set_text("Точность: 100%")
+                    writer.writerow(['good_shots_value', 0])
+                    label_good_shots_value.set_text("Выстрелов попало: 0")
+                    writer.writerow(['points_value', 0])
+                    label_points_value.set_text("Очков получено: 0")
+                    LEVEL_OPENED = 1
             manager.process_events(event)
         manager.update(time_delta)
+        screen.blit(bg, (0, 0))
         manager.draw_ui(screen)
         pygame.display.update()
 
 
-def game_process(level):
+def game_process(level, planets):
+    global LEVEL_COMPLETED
     load_music("battle.wav")
-    clock.tick(120)
     # характеристики уровней: название файла фона, радиус выбора времени спавна врагов,
     # убитых врагов для появления босса, кол-во hp у врагов, кол-во hp у босса,
     # время на восстановление 1 заряда батареи
     level_parameters = {
-                        "Плитон": ["pliton_bg.png", (1000, 3000), 10, 50, 1000, 1000],
-                        "Тептун": ["teptune_bg.png", (900, 2500), 12, 50, 1250, 930],
-                        "Буран": ["buran_bg.png", (800, 2000), 15, 50, 1500, 860],
-                        "Матурн": ["maturne_bg.png", (700, 1700), 17, 50, 1750, 790],
-                        "Юпатер": ["jupater_bg.png", (650, 1500), 20, 50, 2000, 720],
-                        "Морс": ["mors_bg.png", (600, 1300), 22, 100, 2250, 650],
-                        "Кемля": ["kemlya_bg.png", (550, 1100), 25, 100, 2500, 580],
-                        "Венеда": ["veneda_bg.png", (500, 1000), 27, 100, 2750, 510],
-                        "Меркирий": ["merciry_bg.png", (450, 900), 30, 100, 3000, 440],
-                        "Салонце (финал)": ["salonce_bg.png", (400, 800), 40, 150, 5000, 370]
+                        "Плитон": ["pliton_bg.png", (1000, 3000), 10, 50, 500, 1000],
+                        "Тептун": ["teptune_bg.png", (900, 2500), 12, 50, 600, 930],
+                        "Буран": ["buran_bg.png", (800, 2000), 14, 50, 700, 860],
+                        "Матурн": ["maturne_bg.png", (700, 1700), 16, 50, 800, 790],
+                        "Юпатер": ["jupater_bg.png", (650, 1500), 18, 50, 900, 720],
+                        "Морс": ["mors_bg.png", (600, 1300), 20, 100, 1000, 650],
+                        "Кемля": ["kemlya_bg.png", (550, 1100), 22, 100, 1100, 580],
+                        "Венеда": ["veneda_bg.png", (500, 1000), 24, 100, 1200, 510],
+                        "Меркирий": ["merciry_bg.png", (450, 900), 26, 100, 1300, 440],
+                        "Салонце (финал)": ["salonce_bg.png", (400, 800), 28, 100, 1500, 370]
                         }
     enemy_ic_elems = {"enemy_ic_loop_1_16.png": 16,
                       "enemy_ic_loop_2_6.png": 6,
@@ -510,21 +582,30 @@ def game_process(level):
     enemies = []
     is_back_to_menu = False
     is_next_lvl = False
+    is_repeat_lvl = False
+    boss_arrived = False
+    boss = None
+    death_time = "вакашок"
+    boss_death_time = "абалдуй"
     enemy_spawn_ticks = pygame.time.get_ticks()
     time_distance = random.randint(*cur_lvl_par[1])
     points = 0
     player_shots = 0
+    player_good_shots = 0
     killed_enemies = 0
-    bonus_value = 0
     while True:
-        if is_back_to_menu:
-            for sprite in ALL_SPRITES.sprites():
-                sprite.kill()
-            return False
         if is_next_lvl:
             for sprite in ALL_SPRITES.sprites():
                 sprite.kill()
-            return True
+            return True, False, False
+        if is_back_to_menu:
+            for sprite in ALL_SPRITES.sprites():
+                sprite.kill()
+            return False, True, False
+        if is_repeat_lvl:
+            for sprite in ALL_SPRITES.sprites():
+                sprite.kill()
+            return False, False, True
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
@@ -570,23 +651,60 @@ def game_process(level):
         alive_enemies = []
         for enemy in enemies:
             if not enemy.alive():
-                killed_enemies += 1
+                if enemy.was_killed:
+                    killed_enemies += 1
+                    player_good_shots += enemy.got_shot
+                    points += 100
             else:
                 alive_enemies.append(enemy)
         enemies = alive_enemies
+        if killed_enemies >= cur_lvl_par[2] and not boss_arrived:
+            pass
+            boss = Boss(planets.index(level) + 1, cur_lvl_par[4], ALL_SPRITES, ALIEN_SPRITES)
+            boss_arrived = True
         if main_char.is_dead:
             if main_char.alive():
                 main_char.kill()
                 death_time = pygame.time.get_ticks()
-            if pygame.time.get_ticks() - death_time > 1250:
-                is_next_lvl, is_back_to_menu = game_end(level, False, points,
-                                                        player_shots, killed_enemies)
-        if False:  # босс убит
-            is_next_lvl, is_back_to_menu = game_end(level, True, points,
-                                                    player_shots, killed_enemies)
+            if death_time != "вакашок":
+                if pygame.time.get_ticks() - death_time > 1250:
+                    is_next_lvl, is_back_to_menu, is_repeat_lvl = game_end(level, False, points,
+                                                                           player_shots, killed_enemies)
+        if boss:
+            if boss.is_dead:
+                if boss.alive():
+                    boss.kill()
+                    boss_death_time = pygame.time.get_ticks()
+                if boss_death_time != "абалдуй":
+                    if pygame.time.get_ticks() - boss_death_time > 1250:
+                        player_good_shots += boss.got_shot
+                        if planets.index(level) == LEVEL_COMPLETED:
+                            LEVEL_COMPLETED += 1
+                        change_save(killed_enemies, player_shots, player_good_shots, points)
+                        is_next_lvl, is_back_to_menu, is_repeat_lvl = game_end(level, True, points,
+                                                                               player_shots, killed_enemies)
         ALL_SPRITES.draw(screen)
         ALL_SPRITES.update()
         pygame.display.update()
+
+
+def change_save(killed_ships, shots_value, good_shots_value, points_value):
+    data = []
+    with open(f'data/saves/{CUR_SAVE}.csv', 'r', newline='') as csvfile:
+        reader = list(csv.reader(csvfile, delimiter=';', quotechar='"'))[1:]
+        for elem in reader:
+            data.append(elem[1])
+    with open(f'data/saves/{CUR_SAVE}.csv', 'w', newline='') as csvfile:
+        csvfile.truncate()
+        writer = csv.writer(
+            csvfile, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(['set_name', 'value'])
+        writer.writerow(['levels_opened', LEVEL_COMPLETED + 1])
+        writer.writerow(['killed_ships', killed_ships + int(data[1])])
+        writer.writerow(['shots_value', shots_value + int(data[2])])
+        writer.writerow(['accuracy', round((good_shots_value + float(data[4])) / (shots_value + float(data[2])), 2)])
+        writer.writerow(['good_shots_value', good_shots_value + int(data[4])])
+        writer.writerow(['points_value', points_value + int(data[5])])
 
 
 def game_end(level, is_player_won,
@@ -647,16 +765,19 @@ def game_end(level, is_player_won,
                 load_sound("button_hover_2.mp3")
             if event.type == pygame_gui.UI_BUTTON_PRESSED:
                 load_sound("button_clicked.mp3")
-                if event.ui_element == next_lvl_btn:
+                if event.ui_element == next_lvl_btn:  # перейти на след. уровень
                     kill_elements(elements)
-                    return True, False
+                    return True, False, False
+                if event.ui_element == return_lvl_btn:
+                    kill_elements(elements)
+                    return False, False, True
                 if event.ui_element == settings_btn:
                     hide_elements(elements)
                     parameters()
                     show_elements(elements)
-                if event.ui_element == exit_to_lvls_btn:
+                if event.ui_element == exit_to_lvls_btn:  # перейти в меню
                     kill_elements(elements)
-                    return False, True
+                    return False, True, False
             manager.process_events(event)
         manager.update(time_delta)
         screen.blit(bg, (0, 0))

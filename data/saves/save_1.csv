@@ -1,7 +1,7 @@
 set_name;value
-levels_opened;1
-killed_ships;0
-shots_value;0
-accuracy;0
-bonus_value;0
-points_value;0
+levels_opened;11
+killed_ships;210
+shots_value;862
+accuracy;0.54
+good_shots_value;469
+points_value;21000

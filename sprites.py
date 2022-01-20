@@ -52,7 +52,6 @@ class Ship(pygame.sprite.Sprite):
         self.start_ticks = pygame.time.get_ticks()
         self.shot_bullet_pos = [self.pos[0] + start_bullet_pos[0],
                                 self.pos[1] + start_bullet_pos[1]]
-        self.add(ALL_SPRITES)
 
     def cut_sheet(self, sheet, columns):
         self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
@@ -88,7 +87,6 @@ class MainCharacter(Ship):
         self.harmless = True  # неуязвимость после удара
         self.is_almost_dead = False
         self.is_dead = False
-        self.add(ALL_SPRITES)
 
     def update(self):
         self.cur_frame = (self.cur_frame + 1) % len(self.frames)
@@ -146,6 +144,8 @@ class Enemy(Ship):
         self.hp = hp
         self.add(ALIEN_SPRITES)
         self.shot_time_dist = random.randint(700, 1500)
+        self.got_shot = 0
+        self.was_killed = False
         self.is_almost_dead = False
         self.is_dead = False
 
@@ -161,8 +161,13 @@ class Enemy(Ship):
             self.shot()
         bullet_collide = pygame.sprite.spritecollideany(self, PLAYER_BULLET)
         if bullet_collide:
-            self.hp -= 50
-            bullet_collide.kill()
+            if pygame.sprite.collide_mask(self, bullet_collide):
+                self.hp -= 50
+                if self.hp <= 0:
+                    self.was_killed = True
+                if not self.is_almost_dead:
+                    self.got_shot += 1
+                    bullet_collide.kill()
         if self.hp <= 0 and not self.is_almost_dead:
             self.is_almost_dead = True
             self.set_image(self.enemy_death_im[self.start_sheet], 5, *self.pos)
@@ -178,8 +183,84 @@ class Enemy(Ship):
         self.start_ticks = pygame.time.get_ticks()
 
 
-class Boss(Enemy):
-    pass
+class Boss(pygame.sprite.Sprite):
+    def __init__(self, boss_num, hp, *group):
+        super().__init__(*group)
+        self.boss_num = boss_num
+        self.image = load_image(f"boss_ic_{boss_num}.png")
+        self.pos = [850, 300 - (self.image.get_height() // 2)]
+        self.rect = self.image.get_rect().move(self.pos)
+        self.hp = hp
+        self.v = 6
+        self.start_bullet_pos_1 = [-20, (self.image.get_height() * 2) // 15 - 4]
+        self.start_bullet_pos_2 = [-20, (self.image.get_height() * 13) // 15 - 4]
+        self.move_up = random.choice([True, False])
+        self.start_ticks_dir = self.start_ticks_shoot = pygame.time.get_ticks()
+        self.time_to_change_dir = random.randint(500, 2500)
+        self.time_to_shoot = random.randint(350, 750)
+        self.barrier = 800 - (self.image.get_width() + 30)
+        self.got_shot = 0
+        self.is_almost_dead = False
+        self.is_dead = False
+
+        self.frames = []
+        self.sheet = load_image(f"boss_ic_{self.boss_num}_death.png")
+        self.columns = 5
+        self.cur_frame = 0
+        for i in range(self.columns):
+            frame_location = (self.rect.w * i, 0)
+            self.frames.append(self.sheet.subsurface(pygame.Rect(
+                frame_location, self.rect.size)))
+
+    def update(self):
+        if self.is_almost_dead:
+            self.image = self.frames[self.cur_frame]
+            self.cur_frame = (self.cur_frame + 1) % len(self.frames)
+            self.rect = self.image.get_rect().move(self.pos)
+            if self.cur_frame == 4:
+                self.is_dead = True
+        if pygame.time.get_ticks() - self.start_ticks_dir > self.time_to_change_dir:
+            self.move_up = not self.move_up
+            self.start_ticks_dir = pygame.time.get_ticks()
+            self.time_to_change_dir = random.randint(1000, 4000)
+        if pygame.time.get_ticks() - self.start_ticks_shoot > self.time_to_shoot:
+            self.shoot()
+            self.start_ticks_shoot = pygame.time.get_ticks()
+            self.time_to_shoot = random.randint(700, 1500)
+        if self.pos[0] > self.barrier:
+            self.pos[0] -= self.v
+        else:
+            if self.move_up:
+                self.pos[1] -= self.v
+                if self.pos[1] - self.v < 0:
+                    self.move_up = not self.move_up
+                    self.start_ticks_dir = pygame.time.get_ticks()
+                    self.time_to_change_dir = random.randint(1000, 4000)
+            else:
+                self.pos[1] += self.v
+                if self.pos[1] + self.v + self.image.get_height() > 600:
+                    self.move_up = not self.move_up
+                    self.start_ticks_dir = pygame.time.get_ticks()
+                    self.time_to_change_dir = random.randint(1000, 4000)
+        bullet_collide = pygame.sprite.spritecollideany(self, PLAYER_BULLET)
+        if bullet_collide:
+            if pygame.sprite.collide_mask(self, bullet_collide):
+                if not self.is_almost_dead:
+                    self.got_shot += 1
+                    self.hp -= 50
+                    bullet_collide.kill()
+        if self.hp <= 0:
+            self.is_almost_dead = True
+        self.rect = self.image.get_rect().move(self.pos)
+
+    def shoot(self):
+        shot_bullet_pos = random.choice([self.start_bullet_pos_1, self.start_bullet_pos_2])
+        shot_bullet_pos = [self.pos[0] + shot_bullet_pos[0],
+                           self.pos[1] + shot_bullet_pos[1]]
+        AlienBullet("bullet_alien.png", 4, *shot_bullet_pos,
+                    self.v * 2, ALL_SPRITES, ALIEN_BULLET_SPRITES)
+        self.time_to_shoot = random.randint(350, 750)
+        self.start_ticks_shoot = pygame.time.get_ticks()
 
 
 class Bullet(pygame.sprite.Sprite):
@@ -192,7 +273,6 @@ class Bullet(pygame.sprite.Sprite):
         self.rect = self.rect.move(x, y)
         self.pos = [x, y]
         self.v = v
-        self.add(ALL_SPRITES)
 
     def cut_sheet(self, sheet, columns):
         self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
@@ -210,7 +290,6 @@ class Bullet(pygame.sprite.Sprite):
 class AlienBullet(Bullet):
     def __init__(self, sheet, columns, x, y, v, *group):
         super().__init__(sheet, columns, x, y, v, *group)
-        self.add(ALIEN_BULLET_SPRITES)
 
     def update(self):
         self.cur_frame = (self.cur_frame + 1) % len(self.frames)
