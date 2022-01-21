@@ -248,6 +248,7 @@ def select_level_menu():
                     while not do_return_to_menu:
                         LEVEL_OPENED = LEVEL_COMPLETED + 1
                         if do_next_level:
+                            print(LEVEL_OPENED)
                             cur_choosen_planet = planets[planets.index(cur_choosen_planet) + 1]
                             do_next_level, do_return_to_menu, do_repeat_level = \
                                 game_process(cur_choosen_planet, planets)
@@ -255,7 +256,7 @@ def select_level_menu():
                             do_next_level, do_return_to_menu, do_repeat_level = \
                                 game_process(cur_choosen_planet, planets)
                     LEVEL_OPENED = LEVEL_COMPLETED + 1
-
+                    print(LEVEL_OPENED)
                     load_music("menu.wav")
                     show_elements(elements)
             if event.type == pygame_gui.UI_BUTTON_ON_HOVERED:
@@ -668,8 +669,16 @@ def game_process(level, planets):
                 death_time = pygame.time.get_ticks()
             if death_time != "вакашок":
                 if pygame.time.get_ticks() - death_time > 1250:
-                    is_next_lvl, is_back_to_menu, is_repeat_lvl = game_end(level, False, points,
-                                                                           player_shots, killed_enemies)
+                    if boss:
+                        if not boss.is_dead:
+                            change_save(killed_enemies, player_shots, player_good_shots, points)
+
+                            is_next_lvl, is_back_to_menu, is_repeat_lvl = game_end(level, False, points,
+                                                                                   player_shots, killed_enemies)
+                    if not boss:
+                        change_save(killed_enemies, player_shots, player_good_shots, points)
+                        is_next_lvl, is_back_to_menu, is_repeat_lvl = game_end(level, False, points,
+                                                                               player_shots, killed_enemies)
         if boss:
             if boss.is_dead:
                 if boss.alive():
@@ -709,6 +718,7 @@ def change_save(killed_ships, shots_value, good_shots_value, points_value):
 
 def game_end(level, is_player_won,
              player_points, player_shots, killed_enemies):
+    print(LEVEL_OPENED)
     load_music("level_end.mp3")
     if is_player_won:
         bg = load_image("you_won_bg.png")
@@ -768,7 +778,7 @@ def game_end(level, is_player_won,
                 if event.ui_element == next_lvl_btn:  # перейти на след. уровень
                     kill_elements(elements)
                     return True, False, False
-                if event.ui_element == return_lvl_btn:
+                if event.ui_element == return_lvl_btn:  # повторить уровень
                     kill_elements(elements)
                     return False, False, True
                 if event.ui_element == settings_btn:
